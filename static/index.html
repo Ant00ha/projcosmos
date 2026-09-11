@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>cosmo-A — проектирование группировки</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 1100px;
+         margin: 2rem auto; padding: 0 1rem; color: #222; }
+  h1 { font-size: 1.4rem; }
+  h2 { font-size: 1.1rem; margin-top: 0; }
+  h3 { font-size: 1rem; margin: 0.6rem 0 0.3rem 0; }
+  section { border: 1px solid #ddd; border-radius: 8px;
+            padding: 1rem; margin-bottom: 1rem; }
+  button { padding: 0.4rem 0.9rem; cursor: pointer; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+  button.primary { background: #1976d2; color: white; border: none;
+                   border-radius: 4px; }
+  button.danger { background: #e53935; color: white; border: none;
+                  border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 0.5rem; }
+  th, td { border: 1px solid #ddd; padding: 0.4rem 0.6rem;
+           text-align: left; font-size: 0.9rem; }
+  th { background: #f5f5f5; }
+  .ok { color: #0a0; font-weight: 600; }
+  .bad { color: #c00; font-weight: 600; }
+  .muted { color: #888; font-size: 0.85rem; }
+  pre { background: #f5f5f5; padding: 0.5rem; overflow: auto;
+        font-size: 0.8rem; border-radius: 4px; }
+  select, input[type=text], input[type=number] { padding: 0.3rem;
+    border: 1px solid #ccc; border-radius: 4px; }
+  .timeline-controls { display: flex; align-items: center; gap: 0.6rem;
+                       flex-wrap: wrap; margin-bottom: 0.5rem; }
+  input[type=range] { flex: 1; min-width: 300px; }
+  .t-readout { font-family: ui-monospace, monospace; font-size: 0.9rem;
+               background: #f5f5f5; padding: 0.2rem 0.5rem; border-radius: 4px; }
+  .gannt-row { display: flex; align-items: center; margin: 2px 0; }
+  .gannt-label { width: 60px; font-size: 0.85rem; font-weight: 600; }
+  .gannt-track { flex: 1; height: 14px; position: relative;
+                 background: #eee; border-radius: 2px; }
+  .gannt-track span { position: absolute; top: 0; bottom: 0; }
+  .gannt-track span.ok { background: #4caf50; }
+  .gannt-track span.bad { background: #e53935; }
+  .snap-table { font-size: 0.85rem; margin-top: 0.4rem; }
+  .snap-table th, .snap-table td { padding: 0.25rem 0.4rem; }
+  .form-row { display: flex; align-items: center; gap: 0.6rem;
+              margin: 0.4rem 0; flex-wrap: wrap; }
+  .form-row label { min-width: 160px; font-size: 0.9rem; }
+  .form-grid { display: grid;
+               grid-template-columns: 100px 1fr 1fr 1fr;
+               gap: 0.4rem; align-items: center; margin-top: 0.4rem; }
+  .form-grid .head { font-weight: 600; background: #f5f5f5;
+                     padding: 0.3rem; }
+  .hint { color: #888; font-size: 0.8rem; margin-top: 0.2rem; }
+  .failures-list { margin-top: 0.4rem; }
+  .failures-list .row { display: flex; gap: 0.4rem;
+                        align-items: center; margin: 0.2rem 0; }
+  .failures-list input { width: 90px; }
+  .badge { display: inline-block; padding: 0.1rem 0.4rem;
+           border-radius: 10px; font-size: 0.75rem;
+           background: #eee; color: #555; }
+  .badge.new { background: #e3f2fd; color: #1565c0; }
+</style>
+</head>
+<body>
+
+<h1>cosmo-A — проектирование спутниковой группировки</h1>
+
+<section>
+  <h2>1. Сценарии</h2>
+  <button onclick="loadScenarios()">Обновить список</button>
+  <table id="scenarios"><thead><tr>
+    <th>id</th><th>название</th><th>очередь</th><th>ISL, км</th>
+    <th>период, с</th><th>шаг, с</th><th></th>
+  </tr></thead><tbody></tbody></table>
+</section>
+
+<section>
+  <h2>2. Прогоны</h2>
+  <button onclick="loadRuns()">Обновить список</button>
+  <table id="runs"><thead><tr>
+    <th>имя</th><th>сценарий</th>
+    <th>C65 путь</th><th>C70 путь</th><th>C72 путь</th>
+    <th></th>
+  </tr></thead><tbody></tbody></table>
+  <div id="runDetails" class="muted"></div>
+</section>
+
+<section>
+  <h2>3. Сравнение</h2>
+  <label>A: <select id="cmpA"></select></label>
+  <label style="margin-left:1rem">B: <select id="cmpB"></select></label>
+  <button onclick="doCompare()" style="margin-left:1rem">Сравнить</button>
+  <div id="cmpOut"></div>
+</section>
+
+<section>
+  <h2>4. Таймлайн</h2>
+  <label>Прогон: <select id="tlRun"></select></label>
+  <div class="timeline-controls">
+    <button onclick="tlStep(-1)">◀</button>
+    <input type="range" id="tlSlider" min="0" max="0" value="0" step="1"
+           oninput="onSlider(this.value)">
+    <button onclick="tlStep(1)">▶</button>
+    <span class="t-readout" id="tlReadout">t = 0 с</span>
+  </div>
+  <div id="tlGannt"></div>
+  <h3>Состояние на момент t</h3>
+  <div id="tlSnapshot" class="muted">Выберите прогон и двигайте ползунок.</div>
+</section>
+
+<section>
+  <h2>4a. Карта</h2>
+  <div class="form-row">
+    <label>Прогон:</label>
+    <select id="mapRun"></select>
+    <label style="margin-left:1rem">Клиент для маршрута:</label>
+    <select id="mapClient"></select>
+    <button onclick="loadMap()">Показать</button>
+  </div>
+  <div style="margin-top:0.5rem">
+    <canvas id="mapCanvas" width="1000" height="500"
+            style="border:1px solid #ccc; border-radius:4px;
+                   background:#f0f6fa; width:100%; max-width:1000px;"></canvas>
+  </div>
+  <div class="muted" style="margin-top:0.3rem">
+    <span style="color:#4caf50">●</span> активный спутник &nbsp;
+    <span style="color:#9e9e9e">●</span> не запущен &nbsp;
+    <span style="color:#e53935">●</span> в отказе &nbsp;
+    <span style="color:#1976d2">▲</span> client &nbsp;
+    <span style="color:#7b1fa2">■</span> gateway &nbsp;
+    <span style="color:#ffc107; font-weight:bold">━</span> маршрут
+  </div>
+</section>
+
+<section>
+  <h2>5. Редактирование сценария</h2>
+
+  <div class="form-row">
+    <label>Сценарий:</label>
+    <select id="editScenario" onchange="loadScenarioForEdit()"></select>
+    <button onclick="loadScenarioForEdit()">Загрузить</button>
+    <button class="danger" onclick="resetEdit()">Сбросить</button>
+  </div>
+
+  <div id="editForm" style="display:none">
+
+    <h3>Орбита и связь</h3>
+    <div class="form-row">
+      <label>Очередь запуска:</label>
+      <select id="edLaunch">
+        <option value="1">1 — первая очередь</option>
+        <option value="2">2 — вторая очередь</option>
+        <option value="3">3 — полная группировка</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>ISL, км:</label>
+      <input type="number" id="edIsl" step="100" min="500" max="10000">
+      <label style="margin-left:1.5rem">Мин. угол возвышения, °:</label>
+      <input type="number" id="edElev" step="1" min="0" max="89">
+    </div>
+
+    <h3>Плоскости</h3>
+    <div class="form-grid" id="planesGrid">
+      <div class="head">id</div>
+      <div class="head">RAAN, °</div>
+      <div class="head">phase, °</div>
+      <div class="head"></div>
+    </div>
+
+    <h3>Периоды недоступности спутников (failures)</h3>
+    <div class="muted">
+      Начало включается, конец исключается: [start; end).
+      Время от начала расчёта в секундах.
+    </div>
+    <div class="failures-list" id="failuresList"></div>
+    <button onclick="addFailure()">+ Добавить период</button>
+
+    <h3>Действия</h3>
+    <div class="form-row">
+      <button class="primary" onclick="saveEdited()">Сохранить как новый сценарий</button>
+      <button onclick="saveAndRun()">Сохранить и запустить расчёт</button>
+      <span class="muted" id="editStatus"></span>
+    </div>
+  </div>
+
+  <h3>Загрузка своего JSON</h3>
+  <div class="form-row">
+    <input type="file" id="uploadFile" accept=".json,application/json">
+    <button onclick="uploadScenario()">Загрузить</button>
+    <span class="muted" id="uploadStatus"></span>
+  </div>
+</section>
+
+<script>
+// ------------------------------------------------------------- утилиты
+async function api(path, opts) {
+  const r = await fetch(path, opts);
+  if (!r.ok) {
+    const txt = await r.text();
+    alert("Ошибка: " + txt);
+    throw new Error(txt);
+  }
+  return r.json();
+}
+
+// ------------------------------------------------------------- сценарии
+async function loadScenarios() {
+  const list = await api("/api/scenarios");
+  const tb = document.querySelector("#scenarios tbody");
+  tb.innerHTML = "";
+  const sel = document.getElementById("editScenario");
+  const selVal = sel.value;
+  sel.innerHTML = "";
+
+  for (const s of list) {
+    const badge = s.source === "runs"
+      ? ` <span class="badge new">отредактирован</span>` : "";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${s.id}${badge}</td>
+      <td>${s.title || ""}</td>
+      <td>${s.launch_stage ?? ""}</td>
+      <td>${s.isl_range_km ?? ""}</td>
+      <td>${s.horizon_s ?? ""}</td>
+      <td>${s.step_s ?? ""}</td>
+      <td>
+        <button onclick="runScenario('${s.id}')">Запустить</button>
+      </td>`;
+    tb.appendChild(tr);
+
+    sel.insertAdjacentHTML("beforeend",
+      `<option value="${s.id}">${s.id}</option>`);
+  }
+  if (selVal) sel.value = selVal;
+  if (!sel.value && sel.options.length) {
+    sel.value = sel.options[0].value;
+  }
+}
+
+async function runScenario(id) {
+  const name = prompt("Имя прогона:", id);
+  if (name === null) return;
+  document.getElementById("runDetails").textContent =
+      "Расчёт идёт, подождите ~10 секунд...";
+  const res = await api("/api/run", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({scenario_id: id, name}),
+  });
+  document.getElementById("runDetails").textContent = "Готово: " + res.run_id;
+  loadRuns();
+}
+
+// ------------------------------------------------------------- прогоны
+async function loadRuns() {
+  const runs = await api("/api/runs");
+  const tb = document.querySelector("#runs tbody");
+  tb.innerHTML = "";
+  const selA = document.getElementById("cmpA");
+  const selB = document.getElementById("cmpB");
+  const selTl = document.getElementById("tlRun");
+  selA.innerHTML = ""; selB.innerHTML = ""; selTl.innerHTML = "";
+  for (const r of runs) {
+    const s = r.summary || {};
+    const cell = (cid) => {
+      const m = s[cid];
+      if (!m) return "—";
+      const pct = (m.route_ratio * 100).toFixed(1);
+      const ok = m.target_met ? "ok" : "bad";
+      return `<span class="${ok}">${pct}%</span>`;
+    };
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${r.name}</td>
+      <td>${r.scenario_id || ""}</td>
+      <td>${cell("C65")}</td>
+      <td>${cell("C70")}</td>
+      <td>${cell("C72")}</td>
+      <td>
+        <button onclick="showRun('${r.run_id}')">Детали</button>
+        <a href="/api/result/${r.run_id}/export" download>Скачать</a>
+      </td>`;
+    tb.appendChild(tr);
+
+    selA.insertAdjacentHTML("beforeend",
+      `<option value="${r.run_id}">${r.name}</option>`);
+    selB.insertAdjacentHTML("beforeend",
+      `<option value="${r.run_id}">${r.name}</option>`);
+    selTl.insertAdjacentHTML("beforeend",
+      `<option value="${r.run_id}">${r.name}</option>`);
+  }
+  if (runs.length && !window.tlLoaded) {
+    window.tlLoaded = true;
+    loadTimeline();
+  }
+}
+
+async function showRun(runId) {
+  const r = await api(`/api/result/${runId}`);
+  const s = r.summary;
+  let html = `<b>${r.name}</b><pre>`;
+  for (const [cid, m] of Object.entries(s)) {
+    html += `${cid}: видимость ${(m.visibility_ratio*100).toFixed(1)}%, `;
+    html += `путь ${(m.route_ratio*100).toFixed(1)}%, `;
+    html += `перерыв ${m.max_gap_s} с, `;
+    html += `цель ${m.target_met ? "да" : "НЕТ"}\n`;
+    if (m.reasons && Object.keys(m.reasons).length) {
+      html += `    причины: ` +
+        Object.entries(m.reasons).map(([k,v])=>`${k}=${v}`).join(", ") + "\n";
+    }
+  }
+  html += `</pre>`;
+  document.getElementById("runDetails").innerHTML = html;
+}
+
+// ------------------------------------------------------------- сравнение
+async function doCompare() {
+  const a = document.getElementById("cmpA").value;
+  const b = document.getElementById("cmpB").value;
+  if (!a || !b) return;
+  const res = await api("/api/compare", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({a, b}),
+  });
+  let html = `<h3>Параметры</h3><pre>` +
+    JSON.stringify(res.scenario_diff, null, 2) + `</pre>`;
+  html += `<h3>Метрики</h3><table><thead><tr>
+    <th>пункт</th><th>видимость A→B</th><th>путь A→B</th>
+    <th>перерыв A→B</th><th>цель</th></tr></thead><tbody>`;
+  for (const [cid, m] of Object.entries(res.metrics_diff)) {
+    const v = m.visibility_ratio, p = m.route_ratio, g = m.max_gap_s;
+    const tm = m.target_met || {};
+    html += `<tr>
+      <td>${cid}</td>
+      <td>${(v.a*100).toFixed(1)} → ${(v.b*100).toFixed(1)}%</td>
+      <td>${(p.a*100).toFixed(1)} → ${(p.b*100).toFixed(1)}%</td>
+      <td>${g.a} → ${g.b} с</td>
+      <td>${tm.a ? "да" : "нет"} → ${tm.b ? "да" : "нет"}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+  html += `<h3>Маршруты</h3><pre>` +
+    `без изменений: ${res.routes_diff.same}\n` +
+    `изменились:    ${res.routes_diff.changed}\n` +
+    `появились:     ${res.routes_diff.appeared}\n` +
+    `исчезли:       ${res.routes_diff.disappeared}</pre>`;
+  html += `<h3>Рекомендация</h3><ul>` +
+    res.recommendation.map(x => `<li>${x}</li>`).join("") + `</ul>`;
+  document.getElementById("cmpOut").innerHTML = html;
+}
+
+// ------------------------------------------------------------- таймлайн
+let tlData = null;
+let tlRunId = null;
+
+async function loadTimeline() {
+  const runId = document.getElementById("tlRun").value;
+  if (!runId) return;
+  tlRunId = runId;
+
+  tlData = await api(`/api/result/${runId}/timeline`);
+
+  const slider = document.getElementById("tlSlider");
+  slider.min = 0;
+  slider.max = tlData.n_steps - 1;
+  slider.value = 0;
+
+  drawGannt();
+  onSlider(0);
+}
+
+function onSlider(idx) {
+  if (!tlData) return;
+  idx = parseInt(idx, 10);
+  const t = idx * tlData.step_s;
+  document.getElementById("tlReadout").textContent = `t = ${t} с`;
+
+  const marker = document.getElementById("tlCursor");
+  if (marker) {
+    const pct = (idx / (tlData.n_steps - 1)) * 100;
+    marker.style.left = pct + "%";
+  }
+
+  showSnapshotAt(t);
+
+  // синхронная перерисовка карты при движении таймлайна
+  if (mapData) {
+    const runId = document.getElementById("mapRun").value;
+    if (runId) {
+      api(`/api/result/${runId}/map?t=${t}`).then(d => {
+        mapData = d;
+        drawMap();
+      });
+    }
+  }
+}
+
+function tlStep(direction) {
+  const slider = document.getElementById("tlSlider");
+  let v = parseInt(slider.value, 10) + direction;
+  v = Math.max(parseInt(slider.min, 10), Math.min(parseInt(slider.max, 10), v));
+  slider.value = v;
+  onSlider(v);
+}
+
+function drawGannt() {
+  if (!tlData) return;
+  const clients = tlData.clients;
+  const n = tlData.n_steps;
+  let html = `<div style="position:relative">`;
+
+  for (const cid of clients) {
+    const entries = tlData.timeline[cid] || [];
+    let bars = [];
+    let cur = null;
+    for (let i = 0; i < n; i++) {
+      const has = entries[i] && entries[i].has_path;
+      if (!cur || cur.has_path !== has) {
+        if (cur) bars.push(cur);
+        cur = { start: i, end: i + 1, has_path: has };
+      } else {
+        cur.end = i + 1;
+      }
+    }
+    if (cur) bars.push(cur);
+
+    let track = `<div class="gannt-track">`;
+    for (const b of bars) {
+      const left = (b.start / n) * 100;
+      const width = ((b.end - b.start) / n) * 100;
+      const cls = b.has_path ? "ok" : "bad";
+      track += `<span class="${cls}" style="left:${left}%;width:${width}%"></span>`;
+    }
+    track += `</div>`;
+
+    html += `<div class="gannt-row">
+      <div class="gannt-label">${cid}</div>
+      ${track}
+    </div>`;
+  }
+
+  html += `<div id="tlCursor" style="
+      position:absolute;
+      top:0; bottom:20px;
+      left:0; width:2px;
+      background:#000;
+      pointer-events:none;"></div>`;
+  html += `</div>`;
+
+  html += `<div class="muted" style="margin-top:0.4rem">
+    Зелёный — маршрут до шлюза есть, красный — нет.
+    Шкала: 0 … ${tlData.horizon_s} с, шаг ${tlData.step_s} с.
+  </div>`;
+
+  document.getElementById("tlGannt").innerHTML = html;
+}
+
+async function showSnapshotAt(t) {
+  if (!tlRunId) return;
+  const data = await api(`/api/result/${tlRunId}/snapshot?t=${t}`);
+  const snap = data.snapshot;
+  const routes = data.routes || [];
+
+  const edgesByNode = {};
+  for (const e of snap.edges) {
+    (edgesByNode[e[0]] = edgesByNode[e[0]] || []).push(e[1]);
+    (edgesByNode[e[1]] = edgesByNode[e[1]] || []).push(e[0]);
+  }
+
+  let html = `<div class="muted">Активных спутников: ${
+    snap.satellites.filter(s => s.active).length} / ${snap.satellites.length}
+  </div>`;
+
+  html += `<table class="snap-table"><thead><tr>
+    <th>client</th><th>видимые спутники</th><th>маршрут</th></tr></thead><tbody>`;
+  for (const r of routes) {
+    const cid = r.client_id;
+    const visible = (edgesByNode[cid] || [])
+      .filter(x => x.startsWith("S"))
+      .slice(0, 12);
+    const more = (edgesByNode[cid] || []).filter(x => x.startsWith("S")).length - visible.length;
+    const visTxt = visible.length
+      ? visible.join(", ") + (more > 0 ? ` … и ещё ${more}` : "")
+      : "—";
+    const routeTxt = r.path && r.path.length
+      ? `${r.path.join(" → ")} <span class="muted">(${r.path.length - 1} перех.)</span>`
+      : `<span class="bad">нет маршрута</span> <span class="muted">(${r.reason || "—"})</span>`;
+    html += `<tr><td>${cid}</td><td>${visTxt}</td><td>${routeTxt}</td></tr>`;
+  }
+  html += `</tbody></table>`;
+
+  document.getElementById("tlSnapshot").innerHTML = html;
+}
+
+// ------------------------------------------------------------- редактирование
+let editScenario = null;        // исходный сценарий (объект)
+let editOriginalId = null;      // его id
+
+async function loadScenarioForEdit() {
+  const id = document.getElementById("editScenario").value;
+  if (!id) return;
+  editOriginalId = id;
+  editScenario = await api(`/api/scenarios/${id}`);
+  renderEditForm(editScenario);
+  document.getElementById("editForm").style.display = "block";
+  document.getElementById("editStatus").textContent = "";
+}
+
+function renderEditForm(s) {
+  // environment
+  document.getElementById("edLaunch").value = String(s.design.launch_stage);
+  document.getElementById("edIsl").value = s.environment.isl_range_km;
+  document.getElementById("edElev").value = s.environment.min_elevation_deg;
+
+  // planes
+  const grid = document.getElementById("planesGrid");
+  grid.innerHTML = `
+    <div class="head">id</div>
+    <div class="head">RAAN, °</div>
+    <div class="head">phase, °</div>
+    <div class="head"></div>`;
+  for (const p of s.design.planes) {
+    grid.insertAdjacentHTML("beforeend", `
+      <div>${p.id}</div>
+      <div><input type="number" step="0.1" min="0" max="359.999"
+                  data-plane="${p.id}" data-field="raan_deg"
+                  value="${p.raan_deg}"></div>
+      <div><input type="number" step="0.1" min="0" max="359.999"
+                  data-plane="${p.id}" data-field="phase_deg"
+                  value="${p.phase_deg}"></div>
+      <div></div>
+    `);
+  }
+
+  // failures
+  const fl = document.getElementById("failuresList");
+  fl.innerHTML = "";
+  for (const f of (s.failures || [])) {
+    addFailureRow(f.satellite_id, f.start_s, f.end_s);
+  }
+}
+
+function addFailureRow(satId = "", start = 0, end = 7200) {
+  const fl = document.getElementById("failuresList");
+  const satOptions = (editScenario?.design?.satellites || [])
+    .map(s => `<option value="${s.id}">${s.id}</option>`).join("");
+
+  const row = document.createElement("div");
+  row.className = "row";
+  row.innerHTML = `
+    <select class="f-sat">${satOptions}</select>
+    <label>с</label>
+    <input type="number" class="f-start" step="120" min="0" value="${start}">
+    <label>по</label>
+    <input type="number" class="f-end" step="120" min="1" value="${end}">
+    <button class="danger" onclick="this.parentElement.remove()">×</button>
+  `;
+  fl.appendChild(row);
+  if (satId) row.querySelector(".f-sat").value = satId;
+}
+
+function addFailure() {
+  addFailureRow();
+}
+
+function resetEdit() {
+  if (editScenario) renderEditForm(editScenario);
+  document.getElementById("editStatus").textContent = "изменения сброшены";
+}
+
+function collectPatch() {
+  // environment
+  const isl = parseFloat(document.getElementById("edIsl").value);
+  const elev = parseFloat(document.getElementById("edElev").value);
+  const launch = parseInt(document.getElementById("edLaunch").value, 10);
+
+  // planes
+  const planes = [];
+  for (const p of editScenario.design.planes) {
+    const raanEl = document.querySelector(
+      `[data-plane="${p.id}"][data-field="raan_deg"]`);
+    const phaseEl = document.querySelector(
+      `[data-plane="${p.id}"][data-field="phase_deg"]`);
+    planes.push({
+      id: p.id,
+      raan_deg: parseFloat(raanEl.value),
+      phase_deg: parseFloat(phaseEl.value),
+    });
+  }
+
+  // failures
+  const failures = [];
+  document.querySelectorAll("#failuresList .row").forEach(row => {
+    const sid = row.querySelector(".f-sat").value;
+    const s = parseInt(row.querySelector(".f-start").value, 10);
+    const e = parseInt(row.querySelector(".f-end").value, 10);
+    failures.push({ satellite_id: sid, start_s: s, end_s: e });
+  });
+
+  return {
+    environment: { isl_range_km: isl, min_elevation_deg: elev },
+    design: { launch_stage: launch, planes: planes },
+    failures: failures,
+  };
+}
+
+async function saveEdited() {
+  if (!editScenario) return;
+  const patch = collectPatch();
+  try {
+    const res = await api(
+      `/api/run/${editOriginalId}/edit`,
+      {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({patch}),
+      });
+    document.getElementById("editStatus").textContent =
+      "сохранено как " + res.new_scenario_id;
+    loadScenarios();
+    return res.new_scenario_id;
+  } catch (e) {
+    document.getElementById("editStatus").textContent = "ошибка: " + e.message;
+    throw e;
+  }
+}
+
+async function saveAndRun() {
+  if (!editScenario) return;
+  try {
+    const newId = await saveEdited();
+    await runScenario(newId);
+  } catch (e) { /* уже показано */ }
+}
+
+// ------------------------------------------------------------- загрузка
+async function uploadScenario() {
+  const input = document.getElementById("uploadFile");
+  if (!input.files || !input.files.length) {
+    document.getElementById("uploadStatus").textContent = "выберите файл";
+    return;
+  }
+  const form = new FormData();
+  form.append("file", input.files[0]);
+  try {
+    const res = await api("/api/scenarios/upload", {
+      method: "POST",
+      body: form,
+    });
+    document.getElementById("uploadStatus").textContent =
+      "загружено: " + res.id;
+    loadScenarios();
+  } catch (e) {
+    document.getElementById("uploadStatus").textContent =
+      "ошибка: " + e.message;
+  }
+}
+
+let mapData = null;
+
+function project(lon, lat, w, h) {
+  // равнопромежуточная цилиндрическая проекция
+  // x: lon ∈ [-180, 180] → [0, w]
+  // y: lat ∈ [90, -90] → [0, h]  (север сверху)
+  const x = ((lon + 180) / 360) * w;
+  const y = ((90 - lat) / 180) * h;
+  return [x, y];
+}
+
+async function loadMapRuns() {
+  const runs = await api("/api/runs");
+  const sel = document.getElementById("mapRun");
+  const cli = document.getElementById("mapClient");
+  sel.innerHTML = ""; cli.innerHTML = "";
+  for (const r of runs) {
+    sel.insertAdjacentHTML("beforeend",
+      `<option value="${r.run_id}">${r.name}</option>`);
+  }
+  // client'ов заполним при загрузке карты (из ground_sites)
+  if (!window.mapRunsFilled) {
+    window.mapRunsFilled = true;
+    loadMap();
+  }
+}
+
+async function loadMapClients(runId) {
+  // берём ground_sites через /api/result/{run}/snapshot
+  const data = await api(`/api/result/${runId}/snapshot?t=0`);
+  // но там нет ground_sites в удобном виде — используем /map
+  const map = await api(`/api/result/${runId}/map?t=0`);
+  const sel = document.getElementById("mapClient");
+  sel.innerHTML = "";
+  for (const g of map.ground_sites) {
+    if (g.role === "client") {
+      sel.insertAdjacentHTML("beforeend",
+        `<option value="${g.id}">${g.id}</option>`);
+    }
+  }
+}
+
+async function loadMap() {
+  const runId = document.getElementById("mapRun").value;
+  if (!runId) return;
+
+  // если clients ещё не заполнены — заполним
+  if (!document.getElementById("mapClient").options.length) {
+    await loadMapClients(runId);
+  }
+
+  // текущий t берём из таймлайна
+  const slider = document.getElementById("tlSlider");
+  const t = slider ? parseInt(slider.value, 10) * 120 : 0;
+
+  const data = await api(`/api/result/${runId}/map?t=${t}`);
+  mapData = data;
+  drawMap();
+}
+
+function drawMap() {
+  if (!mapData) return;
+  const canvas = document.getElementById("mapCanvas");
+  const ctx = canvas.getContext("2d");
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  // сетка параллелей и меридианов
+  ctx.strokeStyle = "#d0dce6";
+  ctx.lineWidth = 1;
+  for (let lon = -180; lon <= 180; lon += 30) {
+    const [x] = project(lon, 0, W, H);
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let lat = -90; lat <= 90; lat += 30) {
+    const [, y] = project(0, lat, W, H);
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+// ------------------------------------------------------------- старт
+document.getElementById("tlRun").addEventListener("change", () => {
+  window.tlLoaded = true;
+  loadTimeline();
+  // синхронизируем выбор прогона на карте
+  const tlVal = document.getElementById("tlRun").value;
+  const mapSel = document.getElementById("mapRun");
+  if (mapSel && mapSel.value !== tlVal) {
+    mapSel.value = tlVal;
+    loadMap();
+  }
+});
+
+// ------------------------------------------------------------- карта
+
+
+  // подписи параллелей
+  ctx.fillStyle = "#7a8b99";
+  ctx.font = "11px sans-serif";
+  for (let lat = -60; lat <= 60; lat += 30) {
+    const [, y] = project(0, lat, W, H);
+    ctx.fillText(`${lat}°`, 4, y - 2);
+  }
+  // экватор жирнее
+  const [, y0] = project(0, 0, W, H);
+  ctx.strokeStyle = "#a8b8c4";
+  ctx.lineWidth = 1.2;
+  ctx.beginPath(); ctx.moveTo(0, y0); ctx.lineTo(W, y0); ctx.stroke();
+
+  // индекс спутников
+  const satById = {};
+  for (const s of mapData.satellites) satById[s.id] = s;
+
+  // 1. ISL-рёбра (тонкие серые)
+  ctx.strokeStyle = "rgba(80, 130, 180, 0.35)";
+  ctx.lineWidth = 0.8;
+  for (const [a, b, kind] of mapData.edges) {
+    if (kind !== "isl") continue;
+    const sa = satById[a], sb = satById[b];
+    if (!sa || !sb) continue;
+    const [xa, ya] = project(sa.lon, sa.lat, W, H);
+    const [xb, yb] = project(sb.lon, sb.lat, W, H);
+    // не рисуем через край карты, если долготы сильно расходятся
+    if (Math.abs(sa.lon - sb.lon) > 180) continue;
+    ctx.beginPath();
+    ctx.moveTo(xa, ya);
+    ctx.lineTo(xb, yb);
+    ctx.stroke();
+  }
+
+  // 2. наземные контакты (зеленоватые)
+  ctx.strokeStyle = "rgba(76, 175, 80, 0.35)";
+  ctx.lineWidth = 0.8;
+  for (const [a, b, kind] of mapData.edges) {
+    if (kind !== "ground") continue;
+    const sa = satById[a], sb = satById[b];
+    const ga = mapData.ground_sites.find(g => g.id === a);
+    const gb = mapData.ground_sites.find(g => g.id === b);
+    let s, g;
+    if (sa && gb) { s = sa; g = gb; }
+    else if (sb && ga) { s = sb; g = ga; }
+    else continue;
+    const [xs, ys] = project(s.lon, s.lat, W, H);
+    const [xg, yg] = project(g.lon, g.lat, W, H);
+    ctx.beginPath();
+    ctx.moveTo(xs, ys);
+    ctx.lineTo(xg, yg);
+    ctx.stroke();
+  }
+
+  // 3. маршрут выбранного клиента — толстая жёлтая
+  const selClient = document.getElementById("mapClient").value;
+  const route = mapData.routes.find(r => r.client_id === selClient);
+  if (route && route.path && route.path.length > 1) {
+    ctx.strokeStyle = "#ffc107";
+    ctx.lineWidth = 3;
+    ctx.shadowColor = "#ffc107";
+    ctx.shadowBlur = 6;
+    ctx.beginPath();
+    for (let i = 0; i < route.path.length; i++) {
+      const nodeId = route.path[i];
+      let lat, lon;
+      if (satById[nodeId]) {
+        lat = satById[nodeId].lat;
+        lon = satById[nodeId].lon;
+      } else {
+        const g = mapData.ground_sites.find(g => g.id === nodeId);
+        if (!g) continue;
+        lat = g.lat;
+        lon = g.lon;
+      }
+      const [x, y] = project(lon, lat, W, H);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // 4. наземные пункты
+  for (const g of mapData.ground_sites) {
+    const [x, y] = project(g.lon, g.lat, W, H);
+    ctx.fillStyle = g.role === "gateway" ? "#7b1fa2" : "#1976d2";
+    ctx.beginPath();
+    if (g.role === "gateway") {
+      ctx.rect(x - 5, y - 5, 10, 10);
+    } else {
+      ctx.moveTo(x, y - 6);
+      ctx.lineTo(x - 6, y + 5);
+      ctx.lineTo(x + 6, y + 5);
+      ctx.closePath();
+    }
+    ctx.fill();
+    ctx.fillStyle = "#222";
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillText(g.id, x + 8, y + 4);
+  }
+
+  // 5. спутники
+  for (const s of mapData.satellites) {
+    const [x, y] = project(s.lon, s.lat, W, H);
+    let color;
+    if (s.failed) color = "#e53935";
+    else if (!s.active) color = "#9e9e9e";
+    else color = "#4caf50";
+
+    // цвет по плоскости — обводка
+    let stroke = "#fff";
+    if (s.plane_id === "P1") stroke = "#ff7043";
+    else if (s.plane_id === "P2") stroke = "#42a5f5";
+    else if (s.plane_id === "P3") stroke = "#ab47bc";
+
+    ctx.beginPath();
+    ctx.arc(x, y, 4, 0, 2 * Math.PI);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+
+  // подпись времени
+  ctx.fillStyle = "#333";
+  ctx.font = "bold 13px sans-serif";
+  ctx.fillText(`t = ${mapData.t_s} с`, W - 110, 20);
+}
+
+// ------------------------------------------------------------- старт
+document.getElementById("tlRun").addEventListener("change", () => {
+  window.tlLoaded = true;
+  loadTimeline();
+});
+
+document.getElementById("mapRun").addEventListener("change", () => {
+  loadMap();
+});
+
+document.getElementById("mapClient").addEventListener("change", () => {
+  drawMap();
+});
+
+loadScenarios();
+loadRuns();
+loadMapRuns();
+</script>
+</body>
+</html>
