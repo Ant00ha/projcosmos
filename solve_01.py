@@ -8,17 +8,8 @@ import json
 import math
 from collections import deque, Counter
 from pathlib import Path
-import sys
 
 import numpy as np
-
-# --- импорт расчётного модуля ---
-# geometry.py лежит либо рядом, либо в подпапке "Расчетный модуль"
-_HERE = Path(__file__).parent
-for _p in (_HERE / "Расчетный модуль", _HERE):
-    if (_p / "geometry.py").exists():
-        sys.path.insert(0, str(_p))
-        break
 
 from geometry import load, snapshot, validate, positions, R
 
