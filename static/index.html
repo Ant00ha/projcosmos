@@ -77,6 +77,8 @@
 <section>
   <h2>2. Прогоны</h2>
   <button onclick="loadRuns()">Обновить список</button>
+  <button onclick="clearRuns()" style="margin-left:0.5rem;"
+          class="danger">Очистить все</button>
   <table id="runs"><thead><tr>
     <th>имя</th><th>сценарий</th>
     <th>C65 путь</th><th>C70 путь</th><th>C72 путь</th>
@@ -271,16 +273,19 @@ async function loadRuns() {
       return `<span class="${ok}">${pct}%</span>`;
     };
     const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${r.name}</td>
-      <td>${r.scenario_id || ""}</td>
-      <td>${cell("C65")}</td>
-      <td>${cell("C70")}</td>
-      <td>${cell("C72")}</td>
-      <td>
-        <button onclick="showRun('${r.run_id}')">Детали</button>
-        <a href="/api/result/${r.run_id}/export" download>Скачать</a>
-      </td>`;
+tr.innerHTML = `
+  <td>${r.name}</td>
+  <td>${r.scenario_id || ""}</td>
+  <td>${cell("C65")}</td>
+  <td>${cell("C70")}</td>
+  <td>${cell("C72")}</td>
+  <td style="white-space:nowrap">
+    <button onclick="showRun('${r.run_id}')">Детали</button>
+    <a href="/api/result/${r.run_id}/export" download>Скачать</a>
+    <button class="danger"
+            onclick="deleteRun('${r.run_id}', '${r.name}')"
+            title="Удалить">×</button>
+  </td>`;
     tb.appendChild(tr);
 
     selA.insertAdjacentHTML("beforeend",
@@ -897,6 +902,20 @@ document.getElementById("mapRun").addEventListener("change", () => {
 document.getElementById("mapClient").addEventListener("change", () => {
   drawMap();
 });
+
+// ------------------------------------------------------------- удаление
+async function deleteRun(runId, name) {
+  if (!confirm(`Удалить прогон «${name}»?`)) return;
+  await api(`/api/result/${runId}`, {method: "DELETE"});
+  loadRuns();
+}
+
+async function clearRuns() {
+  if (!confirm("Удалить ВСЕ прогоны? Отменить будет нельзя.")) return;
+  const res = await api("/api/runs/clear", {method: "POST"});
+  alert(`Удалено прогонов: ${res.deleted_count}`);
+  loadRuns();
+}
 
 loadScenarios();
 loadRuns();

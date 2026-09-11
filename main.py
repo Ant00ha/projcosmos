@@ -122,6 +122,25 @@ def get_timeline(run_id: str) -> dict:
         "timeline": routes_by_client,
     }
 
+@app.delete("/api/result/{run_id}")
+def delete_run(run_id: str) -> dict:
+    """Удаляет один прогон."""
+    p = _run_path(run_id)
+    if not p.exists():
+        raise HTTPException(404, f"Прогон {run_id!r} не найден")
+    p.unlink()
+    return {"deleted": run_id}
+
+
+@app.post("/api/runs/clear")
+def clear_runs() -> dict:
+    """Удаляет все прогоны. Возвращает число удалённых."""
+    count = 0
+    for p in RUNS_DIR.glob("run_*.json"):
+        p.unlink()
+        count += 1
+    return {"deleted_count": count}
+
 @app.get("/api/scenarios")
 def list_scenarios() -> list[dict]:
     out: list[dict] = []
